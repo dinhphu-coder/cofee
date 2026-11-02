@@ -28,7 +28,7 @@ Tất cả các endpoint đều trả về định dạng JSON nhất quán:
 
 | Phương thức | Đường dẫn | Mô tả & Tham số |
 |---|---|---|
-| `GET` | `/api/v1/health` | Kiểm tra trạng thái hoạt động của Worker, kết nối D1 và R2 |
+| `GET` | `/api/v1/health` | Kiểm tra trạng thái hoạt động của Worker, kết nối D1 và Workers KV |
 | `GET` | `/api/v1/categories` | Lấy danh sách danh mục đang hiển thị kèm số lượng sản phẩm |
 | `GET` | `/api/v1/categories/:slug` | Lấy chi tiết danh mục và danh sách sản phẩm thuộc danh mục |
 | `GET` | `/api/v1/products` | Lấy danh sách sản phẩm. Hỗ trợ: `?page=1&limit=12&q=...&category=...&minPrice=...&maxPrice=...&inStock=true&sort=featured\|price_asc\|price_desc\|rating\|newest` |
@@ -43,7 +43,7 @@ Tất cả các endpoint đều trả về định dạng JSON nhất quán:
 | `POST` | `/api/v1/orders` | Đặt hàng mới. Kiểm tra `idempotency_key`, tính lại giá từ D1, trừ kho nguyên tử và lưu lịch sử trạng thái |
 | `GET` | `/api/v1/orders/track?code=...&phone=...` | Tra cứu tiến độ đơn hàng theo mã đơn (và số điện thoại tùy chọn) |
 | `POST` | `/api/v1/newsletter/subscribe` | Đăng ký nhận bản tin qua email (tích hợp honeypot chống spam) |
-| `GET` | `/api/v1/media/:key` | Đọc và phân phối ảnh công khai từ Cloudflare R2 kèm `Cache-Control` và `ETag` |
+| `GET` | `/api/v1/media/:key` | Đọc và phân phối ảnh công khai từ Cloudflare Workers KV kèm `Cache-Control` và `ETag` |
 
 ---
 
@@ -63,7 +63,7 @@ Tất cả các endpoint đều trả về định dạng JSON nhất quán:
 | `GET` | `/api/v1/admin/orders` | Danh sách đơn hàng (lọc theo `status`, `q`, `from`, `to`) |
 | `GET` | `/api/v1/admin/orders/:id` | Chi tiết đơn hàng kèm snapshot sản phẩm và lịch sử trạng thái |
 | `PATCH` | `/api/v1/admin/orders/:id/status` | Cập nhật trạng thái đơn hàng theo state machine hợp lệ; tự động hoàn kho nếu chuyển sang `cancelled` |
-| `POST` | `/api/v1/admin/uploads` | Tải tệp hình ảnh (JPG/PNG/WebP/AVIF/SVG <= 5MB) lên Cloudflare R2 |
-| `DELETE` | `/api/v1/admin/uploads/:key` | Xóa tệp hình ảnh khỏi Cloudflare R2 |
+| `POST` | `/api/v1/admin/uploads` | Tải tệp hình ảnh (JPG/PNG/WebP/AVIF/SVG <= 5MB) lên Cloudflare Workers KV |
+| `DELETE` | `/api/v1/admin/uploads/:key` | Xóa tệp hình ảnh khỏi Cloudflare Workers KV |
 | `GET / PUT` | `/api/v1/admin/banners` & `/api/v1/admin/content/:key` | Quản lý nội dung Hero và cấu hình phí vận chuyển |
 | `GET` | `/api/v1/admin/newsletter` | Xem danh sách email đăng ký nhận bản tin |

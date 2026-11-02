@@ -1,8 +1,7 @@
-// Bộ lưu trữ dự phòng (In-Memory D1 & R2 Fallback) trên Cloudflare Pages
+// Bộ lưu trữ dự phòng (In-Memory D1 & Workers KV Fallback) trên Cloudflare Pages
 // Giúp website hoạt động 100% ngay lập tức sau khi deploy từ GitHub lên Cloudflare Pages
-// ngay cả khi người dùng chưa kịp gắn D1 / R2 Binding trong phần Settings -> Functions.
-// Khi người dùng gắn D1 (DB) và R2 (BUCKET) thật, hệ thống tự động ưu tiên dùng D1 và R2 thật.
-
+// ngay cả khi người dùng chưa kịp gắn D1 / Workers KV Binding trong phần Settings -> Functions.
+// Khi người dùng gắn D1 (DB) và Workers KV (KV) thật, hệ thống tự động ưu tiên dùng D1 và KV thật.
 import { hashPassword } from '../utils/crypto';
 
 interface MemoryStore {
@@ -1785,31 +1784,123 @@ export function createFallbackD1(): D1Database {
   } as unknown as D1Database;
 }
 
-const r2MemStore = new Map<string, { body: ArrayBuffer; contentType: string }>();
+const kvMemStore = new Map<string, { value: ArrayBuffer; metadata: any }>();
 
-export function createFallbackR2(): R2Bucket {
+export function createFallbackKV(): KVNamespace {
   return {
-    async put(key: string, value: ArrayBuffer, options?: any) {
-      r2MemStore.set(key, {
-        body: value,
-        contentType: options?.httpMetadata?.contentType || 'image/png',
+    async put(
+      key: string,
+      value: string | ArrayBuffer | ArrayBufferView | ReadableStream,
+      options?: { metadata?: any; expiration?: number; expirationTtl?: number }
+    ) {
+      let buf: ArrayBuffer;
+      if (typeof value === 'string') {
+        const enc = new TextEncoder();
+        buf = enc.encode(value).buffer as ArrayBuffer;
+      } else if (value instanceof ArrayBuffer) {
+        buf = value;
+      } else if (ArrayBuffer.isView(value)) {
+        buf = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
+      } else {
+        const reader = (value as ReadableStream<Uint8Array>).getReader();
+        const chunks: Uint8Array[] = [];
+        let total = 0;
+        while (true) {
+          const { done, value: chunk } = await reader.read();
+          if (done) break;
+          if (chunk) {
+            chunks.push(chunk);
+            total += chunk.byteLength;
+          }
+        }
+        const merged = new Uint8Array(total);
+        let offset = 0;
+        for (const c of chunks) {
+          merged.set(c, offset);
+          offset += c.byteLength;
+        }
+        buf = merged.buffer as ArrayBuffer;
+      }
+
+      kvMemStore.set(key, {
+        value: buf,
+        metadata: options?.metadata || {},
       });
-      return { key } as any;
+      return;
     },
-    async get(key: string) {
-      const item = r2MemStore.get(key);
+    async get(key: string, options?: any) {
+      const item = kvMemStore.get(key);
       if (!item) return null;
+      const type = typeof options === 'string' ? options : options?.type;
+      if (type === 'text') {
+        return new TextDecoder().decode(item.value);
+      }
+      if (type === 'json') {
+        try {
+          return JSON.parse(new TextDecoder().decode(item.value));
+        } catch {
+          return null;
+        }
+      }
+      if (type === 'arrayBuffer') {
+        return item.value.slice(0);
+      }
+      if (type === 'stream') {
+        return new ReadableStream({
+          start(controller) {
+            controller.enqueue(new Uint8Array(item.value));
+            controller.close();
+          },
+        });
+      }
+      return new TextDecoder().decode(item.value);
+    },
+    async getWithMetadata(key: string, options?: any) {
+      const item = kvMemStore.get(key);
+      if (!item) return { value: null, metadata: null };
+      const type = typeof options === 'string' ? options : options?.type;
+      let val: any;
+      if (type === 'arrayBuffer') {
+        val = item.value.slice(0);
+      } else if (type === 'json') {
+        try {
+          val = JSON.parse(new TextDecoder().decode(item.value));
+        } catch {
+          val = null;
+        }
+      } else if (type === 'stream') {
+        val = new ReadableStream({
+          start(controller) {
+            controller.enqueue(new Uint8Array(item.value));
+            controller.close();
+          },
+        });
+      } else {
+        val = new TextDecoder().decode(item.value);
+      }
       return {
-        key,
-        body: item.body,
-        httpEtag: 'etag-fallback',
-        writeHttpMetadata(headers: Headers) {
-          headers.set('content-type', item.contentType);
-        },
-      } as any;
+        value: val,
+        metadata: item.metadata || null,
+      };
     },
     async delete(key: string) {
-      r2MemStore.delete(key);
+      kvMemStore.delete(key);
     },
-  } as unknown as R2Bucket;
+    async list(options?: { prefix?: string; limit?: number; cursor?: string }) {
+      const keys: Array<{ name: string; metadata?: any }> = [];
+      const prefix = options?.prefix || '';
+      for (const [k, v] of kvMemStore.entries()) {
+        if (!prefix || k.startsWith(prefix)) {
+          keys.push({ name: k, metadata: v.metadata });
+        }
+      }
+      return {
+        keys,
+        list_complete: true,
+        cursor: '',
+      };
+    },
+  } as unknown as KVNamespace;
 }
+
+export const createFallbackR2 = createFallbackKV as any;

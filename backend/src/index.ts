@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { setCookie, deleteCookie, getCookie } from 'hono/cookie';
 import { ensureDatabaseInitialized, type WorkerEnv } from './db/init';
-import { createFallbackD1, createFallbackR2 } from './db/fallback';
+import { createFallbackD1, createFallbackKV } from './db/fallback';
 import { ok, fail } from './utils/response';
 import { generateRandomHex, sha256Hex, hashPassword, verifyPassword } from './utils/crypto';
 import { handleBaristaChat } from './utils/chatbot';
@@ -63,7 +63,7 @@ app.use(
 );
 
 const fallbackD1 = createFallbackD1();
-const fallbackR2 = createFallbackR2();
+const fallbackKV = createFallbackKV();
 
 // Khởi tạo D1 schema & dữ liệu mẫu môi trường dev (hoặc fallback nếu chưa gắn binding trên Cloudflare Pages)
 app.use('/api/*', async (c, next) => {
@@ -73,7 +73,8 @@ app.use('/api/*', async (c, next) => {
     await ensureDatabaseInitialized(c.env);
   }
   if (!c.env.BUCKET) {
-    (c.env as any).BUCKET = fallbackR2;
+    (c.env as any).KV = fallbackKV;
+    (c.env as any).BUCKET = fallbackKV;
   }
   await next();
 });
@@ -101,7 +102,8 @@ app.get('/api/v1/health', async (c) => {
     status: 'healthy',
     service: 'MỘC Coffee API (HonoJS on Cloudflare Workers)',
     d1Connected: dbCheck?.ok === 1,
-    r2Connected: Boolean(c.env.BUCKET),
+    kvConnected: Boolean(c.env.KV),
+    r2Connected: Boolean(c.env.KV || c.env.BUCKET),
     environment: c.env.ENVIRONMENT || 'development',
     timestamp: new Date().toISOString(),
   });
@@ -1506,31 +1508,126 @@ app.post('/api/v1/newsletter/subscribe', async (c) => {
   );
 });
 
-// 13. Phân phối ảnh công khai từ Cloudflare R2 (GET /api/v1/media/:key)
+// Helper xác định MIME type cho tệp ảnh lưu trong Workers KV
+function getMediaContentType(key: string): string {
+  const ext = (key.split('.').pop() || '').toLowerCase();
+  switch (ext) {
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'png':
+      return 'image/png';
+    case 'webp':
+      return 'image/webp';
+    case 'avif':
+      return 'image/avif';
+    case 'svg':
+      return 'image/svg+xml';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
+// 13. Phân phối ảnh công khai từ Cloudflare Workers KV (GET /api/v1/media/:key)
 app.get('/api/v1/media/:key{.*}', async (c) => {
   const rawKey = c.req.param('key');
   const key = decodeURIComponent(rawKey);
 
-  // Chặn truy cập trái phép vào các thư mục private
+  // Chặn truy cập trái phép vào các thư mục private hoặc path traversal
   if (key.startsWith('private/') || key.includes('..')) {
     return fail(c, 'FORBIDDEN', 'Không có quyền truy cập tài nguyên này.', 403);
   }
 
-  if (!c.env.BUCKET) {
-    return fail(c, 'R2_UNAVAILABLE', 'Chưa cấu hình R2 Bucket.', 503);
+  const kv = (c.env.KV || (c.env as any).BUCKET) as any;
+  if (!kv) {
+    return fail(c, 'KV_UNAVAILABLE', 'Chưa cấu hình Cloudflare Workers KV.', 503);
   }
 
-  const object = await c.env.BUCKET.get(key);
-  if (!object) {
-    return fail(c, 'MEDIA_NOT_FOUND', 'Không tìm thấy tệp hình ảnh trên R2.', 404);
+  let value: ArrayBuffer | null = null;
+  let contentType: string | undefined = undefined;
+
+  // Hỗ trợ đọc từ KV (hoặc R2 nếu đang migration)
+  if (typeof kv.getWithMetadata === 'function') {
+    const res = (await kv.getWithMetadata(key, { type: 'arrayBuffer' })) as {
+      value: ArrayBuffer | null;
+      metadata?: { contentType?: string };
+    };
+    value = res.value;
+    contentType = res.metadata?.contentType;
+
+    // Cơ chế fallback thông minh: nếu không tìm thấy key trực tiếp, thử tìm với basename hoặc prefix
+    if (!value && !key.includes('/')) {
+      for (const prefix of ['products/', 'banners/']) {
+        const fallbackRes = (await kv.getWithMetadata(prefix + key, { type: 'arrayBuffer' })) as {
+          value: ArrayBuffer | null;
+          metadata?: { contentType?: string };
+        };
+        if (fallbackRes?.value) {
+          value = fallbackRes.value;
+          contentType = fallbackRes.metadata?.contentType;
+          break;
+        }
+      }
+    } else if (!value && key.includes('/')) {
+      const baseName = key.split('/').pop() || '';
+      if (baseName) {
+        const fallbackRes = (await kv.getWithMetadata(baseName, { type: 'arrayBuffer' })) as {
+          value: ArrayBuffer | null;
+          metadata?: { contentType?: string };
+        };
+        if (fallbackRes?.value) {
+          value = fallbackRes.value;
+          contentType = fallbackRes.metadata?.contentType;
+        }
+      }
+    }
+  } else if (typeof kv.get === 'function') {
+    const raw: any = await kv.get(key);
+    if (raw && typeof raw === 'object' && 'body' in raw) {
+      const headers = new Headers();
+      raw.writeHttpMetadata?.(headers);
+      headers.set('etag', raw.httpEtag || `W/"kv-${encodeURIComponent(key)}"`);
+      headers.set('cache-control', 'public, max-age=31536000, immutable');
+      return new Response(raw.body, { headers });
+    } else if (raw instanceof ArrayBuffer) {
+      value = raw;
+    }
   }
 
+  // Nếu chưa tìm thấy trong KV, kiểm tra và phân phối trực tiếp từ static assets (c.env.ASSETS)
+  if (!value) {
+    const baseName = (key.split('/').pop() || '').replace(/[^a-z0-9._-]/gi, '');
+    if (baseName && c.env.ASSETS) {
+      try {
+        const staticAssetReq = new Request(new URL(`/images/${baseName}`, c.req.url));
+        const staticAssetRes = await c.env.ASSETS.fetch(staticAssetReq);
+        if (staticAssetRes.status === 200) {
+          const buf = await staticAssetRes.arrayBuffer();
+          const mime = staticAssetRes.headers.get('content-type') || getMediaContentType(baseName);
+          if (kv && typeof kv.put === 'function') {
+            kv.put(key, buf, { metadata: { contentType: mime, autoCached: true } }).catch(() => {});
+          }
+          const headers = new Headers();
+          headers.set('content-type', mime);
+          headers.set('etag', `W/"static-${encodeURIComponent(key)}"`);
+          headers.set('cache-control', 'public, max-age=31536000, immutable');
+          return new Response(buf, { headers });
+        }
+      } catch {}
+    }
+  }
+
+  if (!value) {
+    return fail(c, 'MEDIA_NOT_FOUND', 'Không tìm thấy tệp hình ảnh trên Workers KV.', 404);
+  }
+
+  const resolvedContentType = contentType || getMediaContentType(key);
   const headers = new Headers();
-  object.writeHttpMetadata(headers);
-  headers.set('etag', object.httpEtag);
+  headers.set('content-type', resolvedContentType);
+  headers.set('etag', `W/"kv-${encodeURIComponent(key)}"`);
   headers.set('cache-control', 'public, max-age=31536000, immutable');
 
-  return new Response(object.body, { headers });
+  return new Response(value, { headers });
 });
 
 // ============================================================================
@@ -2363,7 +2460,7 @@ app.patch('/api/v1/admin/customers/:id/status', async (c) => {
   );
 });
 
-// 24. Admin Upload & Xóa ảnh trên Cloudflare R2
+// 24. Admin Upload & Xóa ảnh trên Cloudflare Workers KV
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg',
   'image/png',
@@ -2374,8 +2471,9 @@ const ALLOWED_MIME_TYPES = new Set([
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5MB
 
 app.post('/api/v1/admin/uploads', async (c) => {
-  if (!c.env.BUCKET) {
-    return fail(c, 'R2_NOT_CONFIGURED', 'Chưa cấu hình R2 Bucket trong môi trường hiện tại.', 503);
+  const kv = c.env.KV || (c.env.BUCKET as any);
+  if (!kv) {
+    return fail(c, 'KV_NOT_CONFIGURED', 'Chưa cấu hình Cloudflare Workers KV trong môi trường hiện tại.', 503);
   }
 
   const formData = await c.req.formData();
@@ -2408,16 +2506,18 @@ app.post('/api/v1/admin/uploads', async (c) => {
   const buffer = await file.arrayBuffer();
   const admin = c.get('adminUser');
 
-  await c.env.BUCKET.put(objectKey, buffer, {
-    httpMetadata: {
-      contentType: file.type,
-      cacheControl: 'public, max-age=31536000, immutable',
-    },
-    customMetadata: {
-      uploadedBy: admin.email,
-      originalName: file.name.slice(0, 120),
-    },
-  });
+  // Ghi dữ liệu nhị phân ảnh cùng metadata vào Cloudflare Workers KV
+  if (typeof kv.put === 'function') {
+    await kv.put(objectKey, buffer, {
+      metadata: {
+        contentType: file.type,
+        size: file.size,
+        originalName: file.name.slice(0, 120),
+        uploadedBy: admin.email,
+        uploadedAt: new Date().toISOString(),
+      },
+    });
+  }
 
   const publicUrl = `/api/v1/media/${encodeURIComponent(objectKey)}`;
 
@@ -2428,19 +2528,21 @@ app.post('/api/v1/admin/uploads', async (c) => {
       url: publicUrl,
       size: file.size,
       contentType: file.type,
+      storage: 'workers-kv',
     },
-    'Tải ảnh lên Cloudflare R2 thành công.',
+    'Tải ảnh lên Cloudflare Workers KV thành công.',
     201
   );
 });
 
 app.delete('/api/v1/admin/uploads/:key{.*}', async (c) => {
-  if (!c.env.BUCKET) {
-    return fail(c, 'R2_NOT_CONFIGURED', 'Chưa cấu hình R2 Bucket.', 503);
+  const kv = c.env.KV || (c.env.BUCKET as any);
+  if (!kv) {
+    return fail(c, 'KV_NOT_CONFIGURED', 'Chưa cấu hình Cloudflare Workers KV.', 503);
   }
   const key = decodeURIComponent(c.req.param('key'));
-  await c.env.BUCKET.delete(key);
-  return ok(c, { key, deleted: true }, 'Đã xóa tệp ảnh khỏi Cloudflare R2.');
+  await kv.delete(key);
+  return ok(c, { key, deleted: true }, 'Đã xóa tệp ảnh khỏi Cloudflare Workers KV.');
 });
 
 // 22. Admin Quản lý Banners & Nội dung trang chủ & Newsletter

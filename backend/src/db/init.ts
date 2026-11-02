@@ -2,7 +2,8 @@ import { hashPassword } from '../utils/crypto';
 
 export interface WorkerEnv {
   DB: D1Database;
-  BUCKET: R2Bucket;
+  KV: KVNamespace;
+  BUCKET?: any;
   AI?: any;
   VECTORIZE?: any;
   ASSETS?: Fetcher;

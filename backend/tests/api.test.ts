@@ -61,70 +61,67 @@ function createSqliteD1Adapter(): D1Database {
   } as unknown as D1Database;
 }
 
-// Tạo R2Bucket adapter trong bộ nhớ để kiểm thử luồng Upload / Download / Delete ảnh R2
-function createMemoryR2Adapter(): R2Bucket {
-  const store = new Map<
-    string,
-    { body: ArrayBuffer; httpMetadata?: any; customMetadata?: any; etag: string }
-  >();
+// Tạo KVNamespace adapter trong bộ nhớ để kiểm thử luồng Upload / Download / Delete ảnh Workers KV
+function createMemoryKVAdapter(): KVNamespace {
+  const store = new Map<string, { value: ArrayBuffer; metadata?: any }>();
 
   return {
-    async put(key: string, value: ArrayBuffer | Uint8Array | string, options?: any) {
+    async put(key: string, value: string | ArrayBuffer | ArrayBufferView, options?: any) {
       let buf: ArrayBuffer;
       if (typeof value === 'string') {
         buf = new TextEncoder().encode(value).buffer as ArrayBuffer;
-      } else if (value instanceof Uint8Array) {
+      } else if (value instanceof ArrayBuffer) {
+        buf = value;
+      } else if (ArrayBuffer.isView(value)) {
         buf = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
       } else {
-        buf = value;
+        buf = new ArrayBuffer(0);
       }
-      const obj = {
-        key,
-        body: buf,
-        size: buf.byteLength,
-        httpMetadata: options?.httpMetadata || {},
-        customMetadata: options?.customMetadata || {},
-        etag: `etag-${Date.now()}`,
-      };
-      store.set(key, obj);
-      return obj as any;
+      store.set(key, { value: buf, metadata: options?.metadata });
     },
-    async get(key: string) {
+    async get(key: string, options?: any) {
       const item = store.get(key);
       if (!item) return null;
-      return {
-        key,
-        body: item.body,
-        size: item.body.byteLength,
-        httpEtag: item.etag,
-        httpMetadata: item.httpMetadata,
-        writeHttpMetadata(headers: Headers) {
-          if (item.httpMetadata?.contentType) {
-            headers.set('content-type', item.httpMetadata.contentType);
-          }
-        },
-      } as any;
+      const type = typeof options === 'string' ? options : options?.type;
+      if (type === 'arrayBuffer') return item.value.slice(0);
+      if (type === 'json') return JSON.parse(new TextDecoder().decode(item.value));
+      return new TextDecoder().decode(item.value);
+    },
+    async getWithMetadata(key: string, options?: any) {
+      const item = store.get(key);
+      if (!item) return { value: null, metadata: null };
+      const type = typeof options === 'string' ? options : options?.type;
+      let val: any;
+      if (type === 'arrayBuffer') val = item.value.slice(0);
+      else if (type === 'json') val = JSON.parse(new TextDecoder().decode(item.value));
+      else val = new TextDecoder().decode(item.value);
+      return { value: val, metadata: item.metadata || null };
     },
     async delete(key: string) {
       store.delete(key);
     },
-    async head(key: string) {
-      const item = store.get(key);
-      return item ? ({ key, size: item.body.byteLength } as any) : null;
+    async list(options?: any) {
+      const keys: any[] = [];
+      for (const [k, v] of store.entries()) {
+        keys.push({ name: k, metadata: v.metadata });
+      }
+      return { keys, list_complete: true, cursor: '' };
     },
-  } as unknown as R2Bucket;
+  } as unknown as KVNamespace;
 }
 
-describe('MỘC Coffee Full-Stack HonoJS + D1 + R2 Integration Suite', () => {
+describe('MỘC Coffee Full-Stack HonoJS + D1 + Workers KV Integration Suite', () => {
   let env: WorkerEnv;
   let adminCookie = '';
   let createdOrderId = 0;
   let createdOrderCode = '';
 
   beforeAll(() => {
+    const sharedKV = createMemoryKVAdapter();
     env = {
       DB: createSqliteD1Adapter(),
-      BUCKET: createMemoryR2Adapter(),
+      KV: sharedKV,
+      BUCKET: sharedKV as any,
       ENVIRONMENT: 'development',
       DEFAULT_SHIPPING_FEE: '30000',
       FREE_SHIPPING_THRESHOLD: '500000',
@@ -324,7 +321,7 @@ describe('MỘC Coffee Full-Stack HonoJS + D1 + R2 Integration Suite', () => {
     expect(json.error.code).toBe('VALIDATION_ERROR');
   });
 
-  it('10 & 11. Chặn người dùng chưa xác thực truy cập API Admin và Upload R2', async () => {
+  it('10 & 11. Chặn người dùng chưa xác thực truy cập API Admin và Upload KV', async () => {
     const dashRes = await app.request('/api/v1/admin/dashboard', { method: 'GET' }, env);
     expect(dashRes.status).toBe(401);
 
@@ -359,7 +356,7 @@ describe('MỘC Coffee Full-Stack HonoJS + D1 + R2 Integration Suite', () => {
     adminCookie = setCookieHeader.split(';')[0];
   });
 
-  it('12. Upload ảnh lên Cloudflare R2 thành công và phục vụ qua endpoint media', async () => {
+  it('12. Upload ảnh lên Cloudflare Workers KV thành công và phục vụ qua endpoint media', async () => {
     const pngBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
     const fd = new FormData();
     fd.append('file', new File([pngBytes], 'arabica-pack.png', { type: 'image/png' }));

@@ -24,7 +24,7 @@ const ADMIN_NAV = [
   { to: '/admin/categories', label: 'Danh mục', icon: FolderTree },
   { to: '/admin/orders', label: 'Đơn hàng', icon: ShoppingCart },
   { to: '/admin/customers', label: 'Khách hàng', icon: Users },
-  { to: '/admin/content', label: 'Nội dung & R2', icon: FileText },
+  { to: '/admin/content', label: 'Nội dung & Workers KV', icon: FileText },
 ];
 
 export function AdminLayout() {

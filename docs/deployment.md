@@ -1,6 +1,6 @@
 # Quy Trình Triển Khai Lên Cloudflare (21 Bước Đầy Đủ) — MỘC Coffee
 
-Tài liệu này hướng dẫn từng bước từ cài đặt môi trường Local cho đến khi triển khai hoàn chỉnh lên hạ tầng **Cloudflare Workers + D1 + R2** mà không phụ thuộc vào máy tính cá nhân sau khi deploy.
+Tài liệu này hướng dẫn từng bước từ cài đặt môi trường Local cho đến khi triển khai hoàn chỉnh lên hạ tầng **Cloudflare Workers + D1 + Workers KV** mà không phụ thuộc vào máy tính cá nhân sau khi deploy.
 
 ---
 
@@ -21,7 +21,7 @@ npm install
 ```bash
 npm run dev
 ```
-Lệnh trên khởi chạy Vite kết hợp `@cloudflare/vite-plugin`, tự động mô phỏng Cloudflare Workers runtime, D1 SQLite và R2 Object Storage ngay trên máy local.
+Lệnh trên khởi chạy Vite kết hợp `@cloudflare/vite-plugin`, tự động mô phỏng Cloudflare Workers runtime, D1 SQLite và Workers KV Storage ngay trên máy local.
 
 ### Bước 4: Đăng nhập Cloudflare bằng Wrangler
 ```bash
@@ -45,23 +45,23 @@ Mở tệp `wrangler.jsonc` và thay thế giá trị `REPLACE_WITH_YOUR_D1_DATA
     "database_id": "5f8f3bde-67f5-46f8-94d5-745ea375393b"
   }
 ],
-"r2_buckets": [
-  {
-    "binding": "BUCKET",
-    "bucket_name": "moc-coffee-assets"
-  }
-]
+"kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "<your-kv-namespace-id>"
+    }
+  ]
 ```
 
-### Bước 7: Tạo Cloudflare R2 Bucket
+### Bước 7: Tạo Cloudflare Workers KV Namespace
 ```bash
-npx wrangler r2 bucket create moc-coffee-assets
+npx wrangler kv:namespace create moc-coffee-kv-assets
 ```
 
 ### Bước 8: Kiểm tra cấu hình Binding trong `wrangler.jsonc`
 Đảm bảo `wrangler.jsonc` có đầy đủ 3 bindings:
 - `DB` (D1 Database: `moc-coffee-db`)
-- `BUCKET` (R2 Bucket: `moc-coffee-assets`)
+- `KV` (Workers KV Namespace: `moc-coffee-kv-assets`)
 - `ASSETS` (Workers Static Assets: `./dist/client`)
 
 ### Bước 9: Chạy Migration cho D1 tại Local
@@ -110,7 +110,7 @@ Mở trình duyệt hoặc chạy `curl`:
 ```bash
 curl https://moc-coffee.<subdomain>.workers.dev/api/v1/health
 ```
-Kết quả trả về `"status": "healthy"`, `"d1Connected": true`, `"r2Connected": true`.
+Kết quả trả về `"status": "healthy"`, `"d1Connected": true`, `"kvConnected": true`.
 
 ### Bước 17: Kiểm tra dữ liệu Database D1
 ```bash
@@ -120,7 +120,7 @@ npx wrangler d1 execute moc-coffee-db --remote --command "SELECT COUNT(*) as tot
 ### Bước 18: Kiểm tra đăng nhập Admin
 Truy cập `/admin/login` và đăng nhập bằng `ADMIN_BOOTSTRAP_EMAIL` và `ADMIN_BOOTSTRAP_PASSWORD` đã cài đặt ở Bước 11.
 
-### Bước 19: Kiểm tra Upload và phân phối ảnh trên Cloudflare R2
+### Bước 19: Kiểm tra Upload và phân phối ảnh trên Cloudflare Workers KV
 Trong giao diện Admin (`/admin/products/new` hoặc `/admin/content`), tải lên một hình ảnh sản phẩm và kiểm tra đường dẫn `/api/v1/media/products/...` hiển thị ảnh kèm header `Cache-Control: public, max-age=31536000, immutable`.
 
 ### Bước 20: Kiểm tra luồng Đặt hàng và trừ Tồn kho

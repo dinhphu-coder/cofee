@@ -417,11 +417,11 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ is_active: isActive }),
     }),
-  uploadImageToR2: (file: File, folder = 'products') => {
+  uploadImageToKV: (file: File, folder = 'products') => {
     const fd = new FormData();
     fd.append('file', file);
     fd.append('folder', folder);
-    return request<{ key: string; url: string; size: number; contentType: string }>(
+    return request<{ key: string; url: string; size: number; contentType: string; storage?: string }>(
       '/api/v1/admin/uploads',
       {
         method: 'POST',
@@ -429,6 +429,23 @@ export const api = {
       }
     );
   },
+  uploadImageToR2: (file: File, folder = 'products') => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('folder', folder);
+    return request<{ key: string; url: string; size: number; contentType: string; storage?: string }>(
+      '/api/v1/admin/uploads',
+      {
+        method: 'POST',
+        body: fd,
+      }
+    );
+  },
+  deleteImageFromKV: (key: string) =>
+    request<{ key: string; deleted: boolean }>(
+      `/api/v1/admin/uploads/${encodeURIComponent(key)}`,
+      { method: 'DELETE' }
+    ),
   deleteImageFromR2: (key: string) =>
     request<{ key: string; deleted: boolean }>(
       `/api/v1/admin/uploads/${encodeURIComponent(key)}`,

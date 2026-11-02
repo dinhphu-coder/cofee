@@ -107,7 +107,7 @@ export default function AdminProductsPage() {
             Quản Lý Sản Phẩm
           </h1>
           <p className="text-xs sm:text-sm text-[#777067]">
-            Thêm mới, chỉnh sửa giá bán, cập nhật kho, bật/tắt bán và quản lý ảnh Cloudflare R2.
+            Thêm mới, chỉnh sửa giá bán, cập nhật kho, bật/tắt bán và quản lý ảnh Cloudflare Workers KV.
           </p>
         </div>
 

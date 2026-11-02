@@ -1,6 +1,6 @@
 # MỘC Coffee — Hương Vị Việt. Đánh Thức Đam Mê.
 
-Website thương mại điện tử cà phê đặc sản Việt Nam hoàn chỉnh (Full-Stack), được xây dựng tối ưu cho cả **Laptop** và **Mobile**, vận hành trên hạ tầng **Cloudflare Workers + HonoJS + Cloudflare D1 (SQLite) + Cloudflare R2 (Object Storage) + ReactJS + TypeScript**.
+Website thương mại điện tử cà phê đặc sản Việt Nam hoàn chỉnh (Full-Stack), được xây dựng tối ưu cho cả **Laptop** và **Mobile**, vận hành trên hạ tầng **Cloudflare Workers + HonoJS + Cloudflare D1 (SQLite) + Cloudflare Workers KV + ReactJS + TypeScript**.
 
 ---
 
@@ -25,10 +25,10 @@ Website thương mại điện tử cà phê đặc sản Việt Nam hoàn chỉ
 ### Hệ thống Quản trị Admin (`/admin/*`)
 - **Xác thực bảo mật (`/admin/login`)**: Băm mật khẩu bằng **PBKDF2-HMAC-SHA256 (100.000 vòng)** trên Web Crypto API, quản lý phiên trong bảng `sessions` của D1 qua cookie `HttpOnly; SameSite=Lax`, có Rate Limiting chống dò mật khẩu.
 - **Dashboard (`/admin`)**: Thống kê doanh thu, tổng đơn hàng, đơn chờ duyệt, biểu đồ doanh thu theo ngày (7/30/90 ngày), sản phẩm bán chạy và cảnh báo tồn kho thấp truy vấn trực tiếp từ D1.
-- **Quản lý sản phẩm (`/admin/products`, `/admin/products/new`, `/admin/products/:id/edit`)**: Thêm/sửa/xóa hoặc ngừng bán sản phẩm, tự động ghi nhật ký biến động kho (`inventory_movements`), tích hợp tải ảnh trực tiếp lên **Cloudflare R2**.
+- **Quản lý sản phẩm (`/admin/products`, `/admin/products/new`, `/admin/products/:id/edit`)**: Thêm/sửa/xóa hoặc ngừng bán sản phẩm, tự động ghi nhật ký biến động kho (`inventory_movements`), tích hợp tải ảnh trực tiếp lên **Cloudflare Workers KV**.
 - **Quản lý danh mục (`/admin/categories`)**: CRUD danh mục, chặn xóa danh mục đang chứa sản phẩm.
 - **Quản lý đơn hàng (`/admin/orders`, `/admin/orders/:id`)**: Lọc theo trạng thái/ngày/từ khóa, chuyển trạng thái đơn theo quy tắc State Machine hợp lệ (`pending` → `confirmed` → `processing` → `shipped` → `delivered` / `cancelled`), tự động hoàn trả tồn kho khi hủy đơn.
-- **Quản lý nội dung & R2 (`/admin/content`)**: Chỉnh sửa thông điệp Hero trang chủ, cấu hình phí vận chuyển mặc định, tải tệp lên R2 và xem danh sách người đăng ký Newsletter.
+- **Quản lý nội dung & Workers KV (`/admin/content`)**: Chỉnh sửa thông điệp Hero trang chủ, cấu hình phí vận chuyển mặc định, tải tệp lên Workers KV và xem danh sách người đăng ký Newsletter.
 
 ---
 
@@ -36,8 +36,8 @@ Website thương mại điện tử cà phê đặc sản Việt Nam hoàn chỉ
 - **Frontend**: React 19, TypeScript (Strict Mode), Vite 6, Tailwind CSS v4, React Router v7, TanStack Query v5, React Hook Form, Zod, Lucide React.
 - **Backend**: HonoJS v4 trên Cloudflare Workers Runtime (`/api/v1/*`).
 - **Database**: Cloudflare D1 (SQLite) — 15 bảng dữ liệu.
-- **Object Storage**: Cloudflare R2 (`BUCKET` binding).
-- **Testing**: Vitest + Node SQLite (`node:sqlite`) kiểm thử tích hợp toàn bộ luồng API, D1, R2, Auth và Tồn kho.
+- **Media & Asset Storage**: Cloudflare Workers KV (`KV` binding) phân tán toàn cầu tại Edge.
+- **Testing**: Vitest + Node SQLite (`node:sqlite`) kiểm thử tích hợp toàn bộ luồng API, D1, Workers KV, Auth và Tồn kho.
 
 ---
 
@@ -60,7 +60,7 @@ moc-coffee/
 │   ├── index.html           # HTML gốc của ứng dụng Frontend
 │   └── tsconfig.json
 │
-├── backend/                 # Toàn bộ mã nguồn Server API & Database (HonoJS + Cloudflare Workers + D1 + R2)
+├── backend/                 # Toàn bộ mã nguồn Server API & Database (HonoJS + Cloudflare Workers + D1 + Workers KV)
 │   ├── migrations/
 │   │   └── 0001_schema.sql  # Schema khởi tạo bảng và chỉ mục trên Cloudflare D1
 │   ├── seeds/
@@ -72,13 +72,13 @@ moc-coffee/
 │   │   ├── utils/           # Web Crypto PBKDF2 (crypto.ts) & chuẩn hóa JSON response (response.ts)
 │   │   └── index.ts         # Toàn bộ routes /api/v1/* của HonoJS Worker
 │   ├── tests/
-│   │   └── api.test.ts      # Bộ kiểm thử tích hợp Backend API + D1 + R2
+│   │   └── api.test.ts      # Bộ kiểm thử tích hợp Backend API + D1 + Workers KV
 │   └── tsconfig.json
 │
 ├── docs/                    # Tài liệu kiến trúc, API, Database và hướng dẫn Deploy
 ├── scripts/
 │   └── build-worker.mjs     # Script đóng gói Worker bundle (dist/_worker.js)
-├── wrangler.jsonc           # Cấu hình Cloudflare Pages / Workers + D1 + R2
+├── wrangler.jsonc           # Cấu hình Cloudflare Pages / Workers + D1 + Workers KV
 ├── vite.config.ts           # Cấu hình Vite cho Frontend & Dev Server tích hợp Backend
 └── package.json
 ```
@@ -98,7 +98,7 @@ moc-coffee/
    npm run db:seed
    ```
 
-3. **Chạy máy chủ phát triển (Frontend + Hono Worker + D1 + R2 Local):**
+3. **Chạy máy chủ phát triển (Frontend + Hono Worker + D1 + Workers KV Local):**
    ```bash
    npm run dev
    ```
@@ -138,8 +138,11 @@ npx wrangler login
 # 2. Tạo D1 Database và cập nhật database_id vào wrangler.jsonc
 npx wrangler d1 create moc-coffee-db
 
-# 3. Tạo R2 Bucket
-npx wrangler r2 bucket create moc-coffee-assets
+# 3. Tạo Workers KV Namespace
+npx wrangler kv:namespace create moc-coffee-kv-assets
+# Sao chép id trả về và điền vào trường id của binding KV trong wrangler.jsonc
+# Đồng bộ hình ảnh mẫu vào Workers KV (tùy chọn):
+npm run seed:kv
 
 # 4. Chạy migration lên D1 Production
 npm run db:migrate:prod
@@ -156,5 +159,5 @@ npm run deploy:web
 
 ## 8. Troubleshooting & Cập Nhật Sau Khi Deploy
 - **Lỗi `D1_ERROR: no such table`**: Đảm bảo bạn đã chạy `npm run db:migrate:prod` với đúng `database_id` trong `wrangler.jsonc`.
-- **Lỗi tải ảnh R2 (`503 R2_NOT_CONFIGURED`)**: Kiểm tra tên bucket `moc-coffee-assets` đã được tạo bằng `npx wrangler r2 bucket create moc-coffee-assets` và khớp với binding `BUCKET` trong `wrangler.jsonc`.
+- **Lỗi tải ảnh Workers KV (`503 KV_NOT_CONFIGURED`)**: Kiểm tra KV Namespace đã được tạo bằng `npx wrangler kv:namespace create moc-coffee-kv-assets` và khớp với binding `KV` trong `wrangler.jsonc`.
 - **Cập nhật giao diện hoặc API sau khi sửa code**: Chạy `npm test && npm run build && npx wrangler deploy`.

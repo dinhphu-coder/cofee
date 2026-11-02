@@ -27,7 +27,7 @@ erDiagram
 | 3 | `categories` | Danh mục sản phẩm | `id` PK, `name`, `slug` UNIQUE, `description`, `image_url`, `image_key`, `is_active` |
 | 4 | `products` | Sản phẩm cà phê | `id` PK, `category_id` FK, `slug` UNIQUE, `sku` UNIQUE, `price` (INT VND), `sale_price`, `stock` (INT) |
 | 5 | `product_variants` | Biến thể khối lượng/cỡ xay | `id` PK, `product_id` FK, `sku` UNIQUE, `grind_type`, `weight_grams`, `price`, `stock` |
-| 6 | `product_images` | Thư viện ảnh phụ của SP | `id` PK, `product_id` FK, `image_url`, `image_key` (R2 object key), `is_primary` |
+| 6 | `product_images` | Thư viện ảnh phụ của SP | `id` PK, `product_id` FK, `image_url`, `image_key` (Workers KV key), `is_primary` |
 | 7 | `orders` | Đơn đặt hàng của khách | `id` PK, `order_code` UNIQUE, `idempotency_key` UNIQUE, `status`, `subtotal`, `shipping_fee`, `total` |
 | 8 | `order_items` | Chi tiết từng dòng đơn hàng | `id` PK, `order_id` FK, `product_id` FK, `product_name_snapshot`, `sku_snapshot`, `unit_price`, `quantity` |
 | 9 | `inventory_movements` | Nhật ký xuất/nhập/hoàn kho | `id` PK, `product_id` FK, `order_id` FK, `change_amount`, `previous_stock`, `new_stock`, `reason` |

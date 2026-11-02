@@ -34,7 +34,7 @@ export default function AdminProductFormPage() {
   const { data: existingProduct, isLoading } = useAdminProductById(productId);
   const saveMutation = useSaveAdminProduct();
 
-  const [uploadingR2, setUploadingR2] = useState(false);
+  const [uploadingKV, setUploadingKV] = useState(false);
 
   const {
     register,
@@ -98,19 +98,19 @@ export default function AdminProductFormPage() {
 
   const currentImageUrl = watch('image_url');
 
-  const handleR2FileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleKVFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploadingR2(true);
+    setUploadingKV(true);
     try {
-      const uploaded = await api.uploadImageToR2(file, 'products');
+      const uploaded = await api.uploadImageToKV(file, 'products');
       setValue('image_url', uploaded.url, { shouldValidate: true });
       setValue('image_key', uploaded.key);
-      showToast('Đã tải ảnh lên Cloudflare R2 thành công!');
+      showToast('Đã tải ảnh lên Cloudflare Workers KV thành công!');
     } catch (err: any) {
-      showToast(err.message || 'Lỗi tải ảnh lên R2', 'error');
+      showToast(err.message || 'Lỗi tải ảnh lên Workers KV', 'error');
     } finally {
-      setUploadingR2(false);
+      setUploadingKV(false);
     }
   };
 
@@ -303,10 +303,10 @@ export default function AdminProductFormPage() {
           </div>
         </div>
 
-        {/* R2 Image Upload Section */}
+        {/* Workers KV Image Upload Section */}
         <div className="p-4 rounded bg-[#F7F2EA] border border-[#E6DED3] space-y-3">
           <label className="block text-xs font-semibold text-[#171512]">
-            Hình ảnh bao bì sản phẩm (Lưu trữ trên Cloudflare R2) *
+            Hình ảnh bao bì sản phẩm (Lưu trữ trên Cloudflare Workers KV) *
           </label>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
             {currentImageUrl && (
@@ -320,24 +320,24 @@ export default function AdminProductFormPage() {
               <input
                 type="text"
                 {...register('image_url')}
-                placeholder="/images/product-house-blend.png hoặc URL từ R2"
+                placeholder="/images/product-house-blend.png hoặc URL từ Workers KV"
                 className="w-full px-3.5 py-2 rounded border border-[#E6DED3] bg-white text-xs"
               />
               <div className="flex items-center gap-3">
                 <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded bg-[#4A2E24] text-[#FFFDF9] text-xs font-semibold cursor-pointer hover:bg-[#3A231B]">
                   <Upload className="w-3.5 h-3.5" />
-                  <span>{uploadingR2 ? 'Đang tải lên R2...' : 'Tải ảnh từ máy tính lên R2'}</span>
+                  <span>{uploadingKV ? 'Đang tải lên Workers KV...' : 'Tải ảnh từ máy tính lên Workers KV'}</span>
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp,image/avif"
-                    onChange={handleR2FileUpload}
-                    disabled={uploadingR2}
+                    onChange={handleKVFileUpload}
+                    disabled={uploadingKV}
                     className="hidden"
                   />
                 </label>
                 {watch('image_key') && (
                   <span className="text-[11px] font-mono text-[#183B2D]">
-                    R2 Key: {watch('image_key')}
+                    KV Key: {watch('image_key')}
                   </span>
                 )}
               </div>

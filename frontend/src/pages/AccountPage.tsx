@@ -887,7 +887,7 @@ export default function AccountPage() {
               >
                 <span className="inline-flex items-center gap-2">
                   <FileText className="w-4 h-4 text-[#A65F3B]" />
-                  Nội Dung & Tải Ảnh R2
+                  Nội Dung & Tải Ảnh Workers KV
                 </span>
                 <ArrowRight className="w-3.5 h-3.5 text-[#777067]" />
               </Link>

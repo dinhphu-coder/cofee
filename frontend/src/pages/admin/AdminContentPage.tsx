@@ -17,7 +17,7 @@ export default function AdminContentPage() {
   const [subscribers, setSubscribers] = useState<
     { id: number; email: string; status: string; created_at: string }[]
   >([]);
-  const [r2UploadedUrl, setR2UploadedUrl] = useState('');
+  const [kvUploadedUrl, setKvUploadedUrl] = useState('');
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
@@ -70,16 +70,16 @@ export default function AdminContentPage() {
     }
   };
 
-  const handleR2Upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleKvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     try {
-      const res = await api.uploadImageToR2(file, 'banners');
-      setR2UploadedUrl(res.url);
-      showToast('Đã tải tệp lên Cloudflare R2 thành công!');
+      const res = await api.uploadImageToKV(file, 'banners');
+      setKvUploadedUrl(res.url);
+      showToast('Đã tải tệp lên Cloudflare Workers KV thành công!');
     } catch (err: any) {
-      showToast(err.message || 'Lỗi tải tệp lên R2', 'error');
+      showToast(err.message || 'Lỗi tải tệp lên Workers KV', 'error');
     } finally {
       setUploading(false);
     }
@@ -89,10 +89,10 @@ export default function AdminContentPage() {
     <div className="max-w-5xl space-y-8">
       <div>
         <h1 className="font-serif-display text-2xl sm:text-3xl font-bold text-[#171512]">
-          Quản Lý Nội Dung, Vận Chuyển &amp; Cloudflare R2
+          Quản Lý Nội Dung, Vận Chuyển &amp; Cloudflare Workers KV
         </h1>
         <p className="text-xs sm:text-sm text-[#777067]">
-          Điều chỉnh thông điệp trang chủ, cấu hình phí vận chuyển và quản lý lưu trữ ảnh R2.
+          Điều chỉnh thông điệp trang chủ, cấu hình phí vận chuyển và quản lý lưu trữ ảnh Workers KV.
         </p>
       </div>
 
@@ -164,36 +164,36 @@ export default function AdminContentPage() {
           </button>
         </form>
 
-        {/* R2 Uploader & Newsletter List */}
+        {/* Workers KV Uploader & Newsletter List */}
         <div className="lg:col-span-5 space-y-6">
           <div className="bg-[#FFFDF9] border border-[#E6DED3] rounded-lg p-6 space-y-3">
             <h2 className="font-serif-display text-lg font-bold text-[#171512]">
-              Tải Hình Ảnh Lên Cloudflare R2
+              Tải Hình Ảnh Lên Cloudflare Workers KV
             </h2>
             <p className="text-xs text-[#777067]">
-              Tải ảnh banner hoặc bài viết lên bucket <code className="font-mono">moc-coffee-assets</code> và nhận đường dẫn phân phối công khai.
+              Tải ảnh banner hoặc bài viết lên KV namespace và nhận đường dẫn phân phối công khai tối ưu qua Edge.
             </p>
             <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded bg-[#A65F3B] text-[#FFFDF9] text-xs font-semibold cursor-pointer">
               <Upload className="w-4 h-4" />
-              <span>{uploading ? 'Đang tải lên R2...' : 'Chọn tệp ảnh tải lên R2'}</span>
+              <span>{uploading ? 'Đang tải lên Workers KV...' : 'Chọn tệp ảnh tải lên Workers KV'}</span>
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/avif"
-                onChange={handleR2Upload}
+                onChange={handleKvUpload}
                 className="hidden"
               />
             </label>
-            {r2UploadedUrl && (
+            {kvUploadedUrl && (
               <div className="pt-2 space-y-2">
                 <img
-                  src={r2UploadedUrl}
-                  alt="R2 Uploaded"
+                  src={kvUploadedUrl}
+                  alt="KV Uploaded"
                   className="w-32 h-32 object-cover rounded border border-[#E6DED3]"
                 />
                 <input
                   type="text"
                   readOnly
-                  value={r2UploadedUrl}
+                  value={kvUploadedUrl}
                   className="w-full px-2.5 py-1.5 rounded bg-[#F7F2EA] border border-[#E6DED3] text-xs font-mono"
                 />
               </div>
