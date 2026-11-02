@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { setCookie, deleteCookie, getCookie } from 'hono/cookie';
 import { ensureDatabaseInitialized, type WorkerEnv } from './db/init';
-import { createFallbackD1, createFallbackKV } from './db/fallback';
+import { createFallbackD1, createFallbackKV, createFallbackVectorize } from './db/fallback';
 import { ok, fail } from './utils/response';
 import { generateRandomHex, sha256Hex, hashPassword, verifyPassword } from './utils/crypto';
 import { handleBaristaChat } from './utils/chatbot';
@@ -64,6 +64,7 @@ app.use(
 
 const fallbackD1 = createFallbackD1();
 const fallbackKV = createFallbackKV();
+const fallbackVectorize = createFallbackVectorize();
 
 // Khởi tạo D1 schema & dữ liệu mẫu môi trường dev (hoặc fallback nếu chưa gắn binding trên Cloudflare Pages)
 app.use('/api/*', async (c, next) => {
@@ -103,6 +104,7 @@ app.get('/api/v1/health', async (c) => {
     service: 'MỘC Coffee API (HonoJS on Cloudflare Workers)',
     d1Connected: dbCheck?.ok === 1,
     kvConnected: Boolean(c.env.KV),
+    vectorizeConnected: Boolean(c.env.VECTORIZE),
     r2Connected: Boolean(c.env.KV || c.env.BUCKET),
     environment: c.env.ENVIRONMENT || 'development',
     timestamp: new Date().toISOString(),

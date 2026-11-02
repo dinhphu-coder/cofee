@@ -53,7 +53,18 @@ Mở tệp `wrangler.jsonc` và thay thế giá trị `REPLACE_WITH_YOUR_D1_DATA
   ]
 ```
 
-### Bước 7: Tạo Cloudflare Workers KV Namespace
+### Bước 7: Tạo Cloudflare Vectorize Index & Workers KV Namespace
+```bash
+# Tạo Vectorize Index 1024 chiều cho AI
+npx wrangler vectorize create moc-coffee-vectors --dimensions=1024 --metric=cosine
+npm run seed:vectorize
+
+# Tạo KV Namespace cho Media Assets
+npx wrangler kv:namespace create moc-coffee-kv-assets
+npm run seed:kv
+```
+
+### Bước 7b: Cấu hình KV Namespace
 ```bash
 npx wrangler kv:namespace create moc-coffee-kv-assets
 ```

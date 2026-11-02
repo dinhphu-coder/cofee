@@ -37,6 +37,8 @@ Website thương mại điện tử cà phê đặc sản Việt Nam hoàn chỉ
 - **Backend**: HonoJS v4 trên Cloudflare Workers Runtime (`/api/v1/*`).
 - **Database**: Cloudflare D1 (SQLite) — 15 bảng dữ liệu.
 - **Media & Asset Storage**: Cloudflare Workers KV (`KV` binding) phân tán toàn cầu tại Edge.
+- **Vector Database**: Cloudflare Vectorize (`VECTORIZE` binding) index `moc-coffee-vectors` (1024 dimensions, metric cosine) phục vụ RAG AI Barista Chatbot.
+- **Workers AI**: Trực tiếp chạy mô hình nhúng `@cf/baai/bge-m3` và mô hình ngôn ngữ lớn `@cf/meta/llama-3.3-70b-instruct-fp8-fast`.
 - **Testing**: Vitest + Node SQLite (`node:sqlite`) kiểm thử tích hợp toàn bộ luồng API, D1, Workers KV, Auth và Tồn kho.
 
 ---
@@ -140,9 +142,13 @@ npx wrangler d1 create moc-coffee-db
 
 # 3. Tạo Workers KV Namespace
 npx wrangler kv:namespace create moc-coffee-kv-assets
-# Sao chép id trả về và điền vào trường id của binding KV trong wrangler.jsonc
-# Đồng bộ hình ảnh mẫu vào Workers KV (tùy chọn):
+# Đồng bộ hình ảnh mẫu vào Workers KV:
 npm run seed:kv
+
+# 4. Tạo Cloudflare Vectorize Index cho AI Barista Chatbot
+npx wrangler vectorize create moc-coffee-vectors --dimensions=1024 --metric=cosine
+# Đồng bộ Vector tri thức & sản phẩm lên Vectorize:
+npm run seed:vectorize
 
 # 4. Chạy migration lên D1 Production
 npm run db:migrate:prod

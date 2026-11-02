@@ -308,7 +308,7 @@ export async function generateEmbeddings(
 
   // Fallback embedding khi chạy local dev / unit test không có kết nối Workers AI
   return {
-    vectors: texts.map((t) => computeFallbackEmbedding(t, 64)),
+    vectors: texts.map((t) => computeFallbackEmbedding(t, 1024)),
     modelUsed: `${modelName} (local-hybrid-vector)`,
   };
 }
@@ -426,7 +426,7 @@ export async function searchVectorDB(
   const { vectors, modelUsed } = await generateEmbeddings(env, [query]);
   const queryVector = vectors[0] || [];
 
-  // Nhánh A: Nếu có Cloudflare Vectorize Index và vector cùng chiều (1024)
+  // Nhánh A: Truy vấn trực tiếp từ Cloudflare Vectorize Index
   if (env.VECTORIZE && typeof env.VECTORIZE.query === 'function' && queryVector.length >= 256) {
     try {
       const vRes = await env.VECTORIZE.query(queryVector, {
@@ -434,23 +434,47 @@ export async function searchVectorDB(
         returnMetadata: 'all',
       });
       if (vRes?.matches?.length) {
-        const topChunks: RagRetrievedChunk[] = vRes.matches.map((m: any) => ({
-          chunk_key: m.id,
-          category: m.metadata?.category || 'general',
-          title: m.metadata?.title || '',
-          content: m.metadata?.content || '',
-          score: Number((m.score || 0).toFixed(4)),
-          product_slug: m.metadata?.product_slug || null,
-        }));
-        return {
-          topChunks,
-          totalChunksIndexed: indexInfo.totalChunks,
-          embeddingModel: modelUsed,
-          vectorBackend: 'cloudflare_vectorize',
-        };
+        const topChunks: RagRetrievedChunk[] = [];
+        for (const m of vRes.matches) {
+          let title = m.metadata?.title || '';
+          let content = m.metadata?.content || '';
+          let category = m.metadata?.category || 'general';
+          let productSlug = m.metadata?.product_slug || null;
+
+          // Nếu metadata trên Vectorize bị thiếu, lookup từ D1 rag_chunks
+          if (!content) {
+            const row = await env.DB.prepare(
+              'SELECT title, content, category, product_slug FROM rag_chunks WHERE chunk_key = ?'
+            ).bind(m.id).first<any>().catch(() => null);
+            if (row) {
+              title = title || row.title;
+              content = content || row.content;
+              category = category || row.category;
+              productSlug = productSlug || row.product_slug;
+            }
+          }
+
+          topChunks.push({
+            chunk_key: m.id,
+            category,
+            title,
+            content,
+            score: Number((m.score || 0).toFixed(4)),
+            product_slug: productSlug,
+          });
+        }
+
+        if (topChunks.length > 0) {
+          return {
+            topChunks,
+            totalChunksIndexed: indexInfo.totalChunks,
+            embeddingModel: modelUsed,
+            vectorBackend: 'cloudflare_vectorize',
+          };
+        }
       }
-    } catch {
-      // Fallback sang D1 Vector Store nếu Vectorize lỗi
+    } catch (err) {
+      console.warn('[RAG Vectorize Query]: Fallback to D1 vector store:', (err as Error)?.message);
     }
   }
 

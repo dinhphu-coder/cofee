@@ -1904,3 +1904,70 @@ export function createFallbackKV(): KVNamespace {
 }
 
 export const createFallbackR2 = createFallbackKV as any;
+
+interface VectorRecord {
+  id: string;
+  values: number[];
+  metadata?: any;
+}
+
+const vectorizeMemStore = new Map<string, VectorRecord>();
+
+export function createFallbackVectorize(): any {
+  return {
+    async upsert(vectors: VectorRecord[]) {
+      for (const vec of vectors) {
+        vectorizeMemStore.set(vec.id, {
+          id: vec.id,
+          values: Array.from(vec.values),
+          metadata: vec.metadata || {},
+        });
+      }
+      return { count: vectors.length };
+    },
+    async query(queryVector: number[], options?: { topK?: number; returnMetadata?: string }) {
+      const topK = options?.topK || 4;
+      const scored: Array<{ id: string; score: number; metadata: any }> = [];
+
+      for (const record of vectorizeMemStore.values()) {
+        const len = Math.min(queryVector.length, record.values.length);
+        if (len === 0) continue;
+        let dot = 0;
+        let normA = 0;
+        let normB = 0;
+        for (let i = 0; i < len; i++) {
+          dot += queryVector[i] * record.values[i];
+          normA += queryVector[i] * queryVector[i];
+          normB += record.values[i] * record.values[i];
+        }
+        const denom = Math.sqrt(normA) * Math.sqrt(normB);
+        const score = denom === 0 ? 0 : dot / denom;
+        scored.push({
+          id: record.id,
+          score,
+          metadata: record.metadata,
+        });
+      }
+
+      scored.sort((a, b) => b.score - a.score);
+      return {
+        matches: scored.slice(0, topK),
+        count: vectorizeMemStore.size,
+      };
+    },
+    async deleteByIds(ids: string[]) {
+      for (const id of ids) vectorizeMemStore.delete(id);
+      return { count: ids.length };
+    },
+    async getByIds(ids: string[]) {
+      return ids.map((id) => vectorizeMemStore.get(id)).filter(Boolean);
+    },
+    async describe() {
+      return {
+        dimensions: 1024,
+        metric: 'cosine',
+        count: vectorizeMemStore.size,
+      };
+    },
+  };
+}

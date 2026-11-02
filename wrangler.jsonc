@@ -26,5 +26,11 @@
       "binding": "KV",
       "id": "7f692b14a6fa44faa10e33657edaf6f3"
     }
+  ],
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "moc-coffee-vectors"
+    }
   ]
 }

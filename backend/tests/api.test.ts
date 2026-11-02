@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import { app } from '../src/index';
 import type { WorkerEnv } from '../src/db/init';
+import { createFallbackVectorize } from '../src/db/fallback';
 
 // Tạo D1Database adapter chạy trên SQLite thực tế (node:sqlite DatabaseSync) để kiểm thử toàn diện
 function createSqliteD1Adapter(): D1Database {
