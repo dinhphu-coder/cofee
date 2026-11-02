@@ -209,9 +209,9 @@ const tempFile = path.resolve(__dirname, '../vectors.ndjson');
 fs.writeFileSync(tempFile, ndjsonLines.join('\n') + '\n', 'utf8');
 console.log(`Đã tạo tệp vectors.ndjson (${(fs.statSync(tempFile).size / 1024).toFixed(1)} KB)`);
 
-console.log('Đang nạp vectors vào Cloudflare Vectorize Index "moc-coffee-vectors"...');
+console.log('Đang nạp vectors vào Cloudflare Vectorize Index "moc-coffee-vector-index"...');
 try {
-  execSync(`npx wrangler vectorize insert moc-coffee-vectors --file="${tempFile}"`, {
+  execSync(`npx wrangler vectorize insert moc-coffee-vector-index --file="${tempFile}"`, {
     stdio: 'inherit',
   });
   console.log('✅ Đã nạp thành công toàn bộ Vectors vào Cloudflare Vectorize!');

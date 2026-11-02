@@ -7,7 +7,7 @@
   "ai": {
     "binding": "AI"
   },
-  // Vector Database chuyên dụng Cloudflare Vectorize (thay thế lưu văn bản thuần)
+  // Vector Database chuyên dụng Cloudflare Vectorize (RAG AI Barista Chatbot)
   "vectorize": [
     {
       "binding": "VECTORIZE",
@@ -32,12 +32,6 @@
     {
       "binding": "KV",
       "id": "7f692b14a6fa44faa10e33657edaf6f3"
-    }
-  ],
-  "vectorize": [
-    {
-      "binding": "VECTORIZE",
-      "index_name": "moc-coffee-vectors"
     }
   ]
 }
