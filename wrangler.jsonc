@@ -7,6 +7,13 @@
   "ai": {
     "binding": "AI"
   },
+  // Vector Database chuyên dụng Cloudflare Vectorize (thay thế lưu văn bản thuần)
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "moc-coffee-vector-index"
+    }
+  ],
   "vars": {
     "ENVIRONMENT": "development",
     "DEFAULT_SHIPPING_FEE": "30000",
