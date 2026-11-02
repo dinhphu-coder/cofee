@@ -19,8 +19,8 @@
     "db:migrate:local": "wrangler d1 execute moc-coffee-db --local --file=./backend/migrations/0001_schema.sql",
     "db:migrate:prod": "wrangler d1 execute moc-coffee-db --remote --file=./backend/migrations/0001_schema.sql",
     "db:seed": "wrangler d1 execute moc-coffee-db --local --file=./backend/seeds/seed.sql",
-    "deploy:api": "npm run build && wrangler pages deploy dist",
-    "deploy:web": "npm run build && wrangler pages deploy dist"
+    "deploy:api": "npm run build && wrangler pages deploy dist --project-name phut1",
+    "deploy:web": "npm run build && wrangler pages deploy dist --project-name phut1"
   },
   "dependencies": {
     "@hookform/resolvers": "^4.1.0",

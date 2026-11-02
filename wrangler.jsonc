@@ -1,5 +1,5 @@
 {
-  "name": "coffeet1",
+  "name": "phut1",
   "compatibility_date": "2025-02-14",
   "pages_build_output_dir": "./dist",
   // Tích hợp trực tiếp Cloudflare Workers AI (https://dash.cloudflare.com/.../ai/models)
@@ -14,7 +14,7 @@
     },
   ],
   "vars": {
-    "ENVIRONMENT": "development",
+    "ENVIRONMENT": "production",
     "DEFAULT_SHIPPING_FEE": "30000",
     "FREE_SHIPPING_THRESHOLD": "500000",
     "CF_EMBEDDING_MODEL": "@cf/baai/bge-m3",
@@ -24,13 +24,13 @@
     {
       "binding": "DB",
       "database_name": "moc-coffee-db",
-      "database_id": "5f8f3bde-67f5-46f8-94d5-745ea375393b",
+      "database_id": "12f6ab15-7168-4645-a100-82e644278767",
     },
   ],
   "kv_namespaces": [
     {
       "binding": "KV",
-      "id": "7f692b14a6fa44faa10e33657edaf6f3",
+      "id": "1cfd1e06a8d34d06bece1862dcf86e1d",
     },
   ],
 }
